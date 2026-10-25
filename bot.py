@@ -1,4 +1,6 @@
-from telethon import TelegramClient, events
+import os
+import asyncio
+from telethon import TelegramClient
 
 API_ID = 6
 API_HASH = "eb06d4abfb49dc3eeb1aeb98ae0f581e"
@@ -18,18 +20,41 @@ FOOTER_TEXT = """
 📍 آدرس: تهرانسر، خیابان ۲۲، پاساژ طلا و جواهر امیر، طلای الی (طلاپول)
 """
 
-client = TelegramClient("gold_userbot_session", API_ID, API_HASH)
+STATE_FILE = "last_id.txt"
 
-@client.on(events.NewMessage(chats=SOURCE_CHANNEL))
-async def forward_and_modify(event):
-    original_text = event.message.text or ""
-    if original_text:
-        final_text = f"{original_text}\n\n{FOOTER_TEXT}"
-        if event.message.media:
-            await client.send_file(TARGET_CHANNEL, event.message.media, caption=final_text, parse_mode='md')
-        else:
-            await client.send_message(TARGET_CHANNEL, final_text, parse_mode='md')
+async def main():
+    client = TelegramClient("gold_userbot_session", API_ID, API_HASH)
+    await client.start()
 
-print("🤖 یوزربات طلا پول روشن شد...")
-client.start()
-client.run_until_disconnected()
+    # خواندن آخرین آیدی پردازش شده
+    last_id = 0
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r") as f:
+                last_id = int(f.read().strip())
+        except:
+            last_id = 0
+
+    # بررسی پیام‌های جدید کانال مبدأ
+    new_last_id = last_id
+    async for message in client.iter_messages(SOURCE_CHANNEL, limit=5):
+        if message.id > last_id:
+            original_text = message.text or ""
+            if original_text or message.media:
+                final_text = f"{original_text}\n\n{FOOTER_TEXT}" if original_text else FOOTER_TEXT
+                if message.media:
+                    await client.send_file(TARGET_CHANNEL, message.media, caption=final_text, parse_mode='md')
+                else:
+                    await client.send_message(TARGET_CHANNEL, final_text, parse_mode='md')
+            
+            if message.id > new_last_id:
+                new_last_id = message.id
+
+    # ذخیره آخرین آیدی ارسال شده
+    if new_last_id > last_id:
+        with open(STATE_FILE, "w") as f:
+            f.write(str(new_last_id))
+
+    await client.disconnect()
+
+asyncio.run(main())
